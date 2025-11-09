@@ -46,6 +46,8 @@ async fn main() {
     trees.push(Tree::new(45, 31));
 
     let mut tree_count: i32 = 1;
+    let update_period = 1.0;
+    let mut last_update: f64 = get_time();
     let mut end_sim: bool = false;
 
     loop {
@@ -54,7 +56,8 @@ async fn main() {
             end_sim = true;
         }
         // this block updates the game state
-        if !end_sim && trees.len() < 4000 {
+        if !end_sim && get_time() - last_update > update_period && trees.len() < 4000 {
+            last_update = get_time();
             let mut new_trees: Vec<Tree> = vec![];
             for tree in &trees {
                 new_trees.push(tree.create_new_gen());
