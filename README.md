@@ -33,6 +33,13 @@ cargo run
 [x] tree count does not update in the UI
 [x] restarting does not restart the state
 
+## Design Notes
+
+* I'm not sure that the create_new_generation function needs to be in a plant trait. It might be better instead to make it part of the tree struct impl.
+    * It really comes down to where the fast vs slow growing trees are represented.
+    * As a part of the Tree struct means the trait doesn't offer much
+    * As a part of a different Tree struct e.g. FastTree, SlowTree with diff impls of the trait. That makes more sense, but is it necessary.
+
 ## Acknowledgments
 Used the following text for learning rust
 
