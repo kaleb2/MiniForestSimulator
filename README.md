@@ -8,6 +8,25 @@ This is a Rust program for simulating a very small subset of old growth forest b
 cargo run
 ```
 
+## Features
+
+[x] Trees that multiply
+
+[ ] Trees that die
+
+[ ] Trees that indicate age or height
+
+## Internal Features
+
+[ ] helper function to update the display text
+[ ] helper function to redraw the board
+
+## Known Bugs
+
+[x] new generations of trees are able to be generated in the same location as the parent
+[ ] new generations of trees are able to be generated with a location outside the grid
+[x] tree count does not update in the UI
+[x] restarting does not restart the state
 
 ## Acknowledgments
 Used the following text for learning rust
