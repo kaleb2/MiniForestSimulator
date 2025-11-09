@@ -16,6 +16,10 @@ cargo run
 
 [ ] Trees that indicate age or height
 
+[ ] Differentiate big slow growing trees and smaller quick growing trees
+
+[ ] Removing trees due to burning
+
 ## Internal Features
 
 [ ] helper function to update the display text
@@ -25,6 +29,7 @@ cargo run
 
 [x] new generations of trees are able to be generated in the same location as the parent
 [ ] new generations of trees are able to be generated with a location outside the grid
+[x] new generations of trees are able to be generated in a location where a tree already exists
 [x] tree count does not update in the UI
 [x] restarting does not restart the state
 

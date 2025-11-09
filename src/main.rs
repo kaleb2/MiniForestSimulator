@@ -4,46 +4,68 @@ const SQUARES: i32 = 128;
 
 type Point = (i32, i32);
 
+#[derive(Clone, Copy)]
+enum TreeType {
+    SlowGrowing,
+    _FastGrowing,
+}
+
 struct Tree {
     position: Point,
     _size: i32,
     color: Color,
+    tree_type: TreeType,
 }
 
 impl Tree {
-    fn new(position_x: i32, position_y: i32) -> Self {
+    fn new(position_x: i32, position_y: i32, tree_type: TreeType) -> Self {
         Self {
             position: (position_x, position_y),
             _size: 1,
             color: GREEN,
+            tree_type
         }
     }
 }
 
 trait Plant {
-    fn create_new_gen(&self) -> Self;
+    fn create_new_gen<F: Fn(Point) -> bool>(&self, is_space_clear: F) -> Vec<Self> where Self: Sized;
 }
 
-fn generate_valid_nonzero_offset_in_range(range: i32) -> i32 {
-    let mut offset: i32 = 0;
-    while offset == 0 {
-        offset = rand::gen_range(-range, range);
+fn generate_valid_position_in_range<F: Fn(Point) -> bool>(position: Point, range: i32, is_space_clear: F) -> Option<Point> {
+    let max_attempts = 5;
+    let mut attempts = 0;
+    let mut offset_x: i32 = 0;
+    let mut offset_y: i32 = 0;
+    while ((offset_x == 0 && offset_y == 0) || !is_space_clear((position.0 + offset_x, position.1 + offset_y)))
+            && attempts < max_attempts {
+        offset_x = rand::gen_range(-range, range);
+        offset_y = rand::gen_range(-range, range);
+        attempts += 1;
     }
-    offset
+    if attempts == max_attempts {
+        return None
+    }
+    Some((position.0 + offset_x, position.1 + offset_y))
 }
 
 impl Plant for Tree {
-    fn create_new_gen(&self) -> Self {
-        let new_position_x: i32 = generate_valid_nonzero_offset_in_range(6);
-        let new_position_y: i32 = generate_valid_nonzero_offset_in_range(6);
-        Self {
-            position: (
-                self.position.0 + new_position_x,
-                self.position.1 + new_position_y,
-            ),
-            _size: 1,
-            color: GREEN,
+    fn create_new_gen<F: Fn(Point) -> bool>(&self, is_space_clear: F) -> Vec<Self> {
+        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+
+        match new_position {
+            Some(p) => vec![Self {
+                position: (
+                    p.0,
+                    p.1,
+                ),
+                _size: 1,
+                color: GREEN,
+                tree_type: self.tree_type
+            }],
+            None => vec![],
         }
+        
     }
 }
 
@@ -108,7 +130,7 @@ async fn main() {
 
                 println!("position: {} {}", position_x, position_y);
 
-                trees.push(Tree::new(position_x as i32, position_y as i32));
+                trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::SlowGrowing));
             }
 
             for tree in &trees {
@@ -134,8 +156,10 @@ async fn main() {
 
             last_update = get_time();
             let mut new_trees: Vec<Tree> = vec![];
+
             for tree in &trees {
-                new_trees.push(tree.create_new_gen());
+                // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.append
+                new_trees.append(&mut tree.create_new_gen(|p: (i32, i32)| !trees.iter().any(|t: &Tree| t.position.0 == p.0 && t.position.1 == p.1)));
             }
             for tree in new_trees {
                 trees.push(tree);
