@@ -1,40 +1,67 @@
-use macroquad::prelude::*;
+use macroquad::{prelude::*, rand};
 
-const SQUARES: i16 = 64;
+const SQUARES: i32 = 64;
 
-type Point = (i16, i16);
+type Point = (i32, i32);
 
 struct Tree {
     position: Point,
-    _size: i16,
+    _size: i32,
     color: Color,
+}
+
+impl Tree {
+    fn new(position_x: i32, position_y: i32) -> Self {
+        Self {
+            position: (position_x, position_y),
+            _size: 1,
+            color: GREEN,
+        }
+    }
+}
+
+trait Plant {
+    fn create_new_gen(&self) -> Self;
+}
+
+impl Plant for Tree {
+    fn create_new_gen(&self) -> Self {
+        let new_position_x: i32 = rand::gen_range(-6, 6);
+        let new_position_y: i32 = rand::gen_range(-6, 6);
+        Self {
+            position: (
+                self.position.0 + new_position_x,
+                self.position.1 + new_position_y,
+            ),
+            _size: 1,
+            color: GREEN,
+        }
+    }
 }
 
 #[macroquad::main("Mini Forest Sim")]
 async fn main() {
-    let mut trees: Vec<Tree> = vec![Tree {
-        position: (8, 8),
-        _size: 1,
-        color: GREEN,
-    }];
-    trees.push(Tree {
-        position: (12, 8),
-        _size: 1,
-        color: DARKGREEN,
-    });
-    trees.push(Tree {
-        position: (8, 9),
-        _size: 1,
-        color: BROWN,
-    });
+    let mut trees: Vec<Tree> = vec![Tree::new(31, 31)];
+    trees.push(Tree::new(15, 15));
+    trees.push(Tree::new(45, 31));
 
     let mut tree_count: i32 = 1;
     let mut end_sim: bool = false;
 
     loop {
-        // this block updates the game state
+        // handle quit
         if !end_sim && is_key_down(KeyCode::Q) {
             end_sim = true;
+        }
+        // this block updates the game state
+        if !end_sim && trees.len() < 4000 {
+            let mut new_trees: Vec<Tree> = vec![];
+            for tree in &trees {
+                new_trees.push(tree.create_new_gen());
+            }
+            for tree in new_trees {
+                trees.push(tree);
+            }
         }
         // this block updates the screen state
         if !end_sim {
