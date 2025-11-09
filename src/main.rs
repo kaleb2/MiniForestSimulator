@@ -7,14 +7,26 @@ type Point = (i16, i16);
 struct Tree {
     position: Point,
     _size: i16,
+    color: Color,
 }
 
 #[macroquad::main("Mini Forest Sim")]
 async fn main() {
-    let mut tree: Tree = Tree {
-        position: (32, 32),
+    let mut trees: Vec<Tree> = vec![Tree {
+        position: (8, 8),
         _size: 1,
-    };
+        color: GREEN,
+    }];
+    trees.push(Tree {
+        position: (12, 8),
+        _size: 1,
+        color: DARKGREEN,
+    });
+    trees.push(Tree {
+        position: (8, 9),
+        _size: 1,
+        color: BROWN,
+    });
 
     let mut tree_count: i32 = 1;
     let mut end_sim: bool = false;
@@ -60,14 +72,16 @@ async fn main() {
                 );
             }
 
-            // draw tree as a green square
-            draw_rectangle(
-                offset_x + tree.position.0 as f32 * sq_size,
-                offset_y + tree.position.1 as f32 * sq_size,
-                sq_size,
-                sq_size,
-                DARKGREEN,
-            );
+            for tree in &trees {
+                // draw tree as a green circle
+                draw_circle(
+                    offset_x + tree.position.0 as f32 * sq_size + (sq_size / 2.0),
+                    offset_y + tree.position.1 as f32 * sq_size + (sq_size / 2.0),
+                    sq_size / 2.0,
+                    // sq_size,
+                    tree.color,
+                );
+            }
 
             // draw instructions
             draw_text(
@@ -94,10 +108,10 @@ async fn main() {
             );
 
             if is_key_down(KeyCode::Enter) {
-                tree = Tree {
-                    position: (16, 16),
-                    _size: 1,
-                };
+                for tree in trees.iter_mut() {
+                    tree.position.0 += 1;
+                    tree.position.1 -= 1;
+                }
                 tree_count = 1;
                 end_sim = false;
             }
