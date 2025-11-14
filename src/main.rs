@@ -4,54 +4,54 @@ const SQUARES: i32 = 128;
 
 type Point = (i32, i32);
 
-#[derive(Clone, Copy)]
-enum TreeType {
-    SlowGrowing,
-    _FastGrowing,
-}
-
-struct Tree {
+struct SlowTree {
     position: Point,
-    _size: i32,
     color: Color,
-    tree_type: TreeType,
 }
 
-impl Tree {
-    fn new(position_x: i32, position_y: i32, tree_type: TreeType) -> Self {
+impl SlowTree {
+    fn new(position_x: i32, position_y: i32) -> Self {
         Self {
             position: (position_x, position_y),
-            _size: 1,
+            color: DARKGREEN,
+        }
+    }
+}
+
+struct FastTree {
+    position: Point,
+    color: Color,
+}
+
+impl FastTree {
+    fn new(position_x: i32, position_y: i32) -> Self {
+        Self {
+            position: (position_x, position_y),
             color: GREEN,
-            tree_type
         }
     }
 }
 
 trait Plant {
-    fn create_new_gen<F: Fn(Point) -> bool>(&self, is_space_clear: F) -> Vec<Self> where Self: Sized;
+    fn create_new_gen<F: FnMut(Point) -> bool>(&self, is_space_clear: &mut F) -> Vec<Self>  where Self: Sized;
+
+    fn get_position(&self) -> Point;
+
+    fn get_color(&self) -> Color;
 }
 
-fn generate_valid_position_in_range<F: Fn(Point) -> bool>(position: Point, range: i32, is_space_clear: F) -> Option<Point> {
-    let max_attempts = 5;
-    let mut attempts = 0;
-    let mut offset_x: i32 = 0;
-    let mut offset_y: i32 = 0;
-    while ((offset_x == 0 && offset_y == 0) || !is_space_clear((position.0 + offset_x, position.1 + offset_y)))
-            && attempts < max_attempts {
-        offset_x = rand::gen_range(-range, range);
-        offset_y = rand::gen_range(-range, range);
-        attempts += 1;
-    }
-    if attempts == max_attempts {
+fn generate_valid_position_in_range<F: FnMut(Point) -> bool>(position: Point, range: i32, is_space_clear: &mut F) -> Option<Point> {
+    let offset_x: i32 = rand::gen_range(-range, range);
+    let offset_y: i32 = rand::gen_range(-range, range);
+    if (offset_x == 0 && offset_y == 0) || !is_space_clear((position.0 + offset_x, position.1 + offset_y)) {
         return None
     }
     Some((position.0 + offset_x, position.1 + offset_y))
 }
 
-impl Plant for Tree {
-    fn create_new_gen<F: Fn(Point) -> bool>(&self, is_space_clear: F) -> Vec<Self> {
-        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+impl Plant for SlowTree {
+    fn create_new_gen<F: FnMut(Point) -> bool>(&self, is_space_clear: &mut F) -> Vec<Self> {
+        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 3, is_space_clear);
 
         match new_position {
             Some(p) => vec![Self {
@@ -59,19 +59,54 @@ impl Plant for Tree {
                     p.0,
                     p.1,
                 ),
-                _size: 1,
                 color: GREEN,
-                tree_type: self.tree_type
             }],
             None => vec![],
+        }        
+    }
+
+    fn get_position(&self) -> Point {
+        self.position
+    }
+
+    fn get_color(&self) -> Color {
+        self.color
+    }
+}
+
+impl Plant for FastTree {
+    fn create_new_gen<F: FnMut(Point) -> bool>(&self, is_space_clear: &mut F) -> Vec<Self> where Self: Sized{
+        let mut next_gen: Vec<Self> = vec![];
+
+        for _ in 0..3 {
+            let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+            match new_position {
+                Some(p) => next_gen.push(Self {
+                    position: (
+                        p.0,
+                        p.1,
+                    ),
+                    color: GREEN,
+                }),
+                None => continue,
+            }
         }
-        
+
+        next_gen
+    }
+
+    fn get_position(&self) -> Point {
+        self.position
+    }
+
+    fn get_color(&self) -> Color {
+        self.color
     }
 }
 
 #[macroquad::main("Mini Forest Sim")]
 async fn main() {
-    let mut trees: Vec<Tree> = vec![];
+    let mut plants: Vec<Box<dyn Plant>> = vec![];
     let mut tree_count: usize = 0;
     let update_period = 1.0;
     let mut last_update: f64 = get_time();
@@ -83,7 +118,7 @@ async fn main() {
         let offset_y: f32 = (screen_height() - game_size) / 2. + 10.;
         let sq_size: f32 = (screen_height() - offset_y * 2.) / SQUARES as f32;
 
-        while trees.len() < 3 {
+        while plants.len() < 3 {
             clear_background(LIGHTGRAY);
 
             // draw background
@@ -130,17 +165,28 @@ async fn main() {
 
                 println!("position: {} {}", position_x, position_y);
 
-                trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::SlowGrowing));
+                plants.push(Box::new(SlowTree::new(position_x as i32, position_y as i32)));
+            } else if is_mouse_button_pressed(MouseButton::Right) {
+                let (mouse_x, mouse_y) = mouse_position();
+                println!("mouse: {} {}", mouse_x, mouse_y);
+
+                let position_x: f32 = (mouse_x - (sq_size / 2.0) - offset_x) / sq_size;
+                let position_y: f32 = (mouse_y - (sq_size / 2.0) - offset_y) / sq_size;
+
+                println!("position: {} {}", position_x, position_y);
+
+                plants.push(Box::new(FastTree::new(position_x as i32, position_y as i32)));
             }
 
-            for tree in &trees {
+            for tree in &plants {
+
                 // draw tree as a green circle
                 draw_circle(
-                    offset_x + tree.position.0 as f32 * sq_size + (sq_size / 2.0),
-                    offset_y + tree.position.1 as f32 * sq_size + (sq_size / 2.0),
+                    offset_x + tree.get_position().0 as f32 * sq_size + (sq_size / 2.0),
+                    offset_y + tree.get_position().1 as f32 * sq_size + (sq_size / 2.0),
                     sq_size / 2.0,
                     // sq_size,
-                    tree.color,
+                    tree.get_color(),
                 );
             }
 
@@ -151,20 +197,21 @@ async fn main() {
             end_sim = true;
         }
         // // this block updates the game state
-        if !end_sim && get_time() - last_update > update_period && trees.len() < 4000 {
+        if !end_sim && get_time() - last_update > update_period && plants.len() < 4000 {
             println!("Updating trees");
 
             last_update = get_time();
-            let mut new_trees: Vec<Tree> = vec![];
+            let mut new_trees: Vec<Box<dyn Plant>> = vec![];
 
-            for tree in &trees {
+            for tree in &plants {
                 // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.append
-                new_trees.append(&mut tree.create_new_gen(|p: (i32, i32)| !trees.iter().any(|t: &Tree| t.position.0 == p.0 && t.position.1 == p.1)));
+                let next_gen = tree.create_new_gen(|p: (i32, i32)| !plants.iter().any(|t: &Box<dyn Plant>| t.get_position().0 == p.0 && t.get_position().1 == p.1));
+                new_trees.append(&mut next_gen);
             }
             for tree in new_trees {
-                trees.push(tree);
+                plants.push(tree);
             }
-            tree_count = trees.len();
+            tree_count = plants.len();
         }
         // this block updates the screen state
         if !end_sim {
@@ -197,14 +244,14 @@ async fn main() {
                 );
             }
 
-            for tree in &trees {
+            for tree in &plants {
                 // draw tree as a green circle
                 draw_circle(
-                    offset_x + tree.position.0 as f32 * sq_size + (sq_size / 2.0),
-                    offset_y + tree.position.1 as f32 * sq_size + (sq_size / 2.0),
+                    offset_x + tree.get_position().0 as f32 * sq_size + (sq_size / 2.0),
+                    offset_y + tree.get_position().1 as f32 * sq_size + (sq_size / 2.0),
                     sq_size / 2.0,
                     // sq_size,
-                    tree.color,
+                    tree.get_color(),
                 );
             }
 
@@ -233,7 +280,7 @@ async fn main() {
             );
 
             if is_key_down(KeyCode::Enter) {
-                trees.clear();
+                plants.clear();
                 tree_count = 0;
                 end_sim = false;
             }
