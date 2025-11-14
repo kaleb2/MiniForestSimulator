@@ -14,7 +14,9 @@ cargo run
 
 [x] Trees that die
 
-[ ] Trees that indicate age or height
+[ ] Trees that visually indicate age
+
+[ ] Dead trees create nurse logs
 
 [x] Differentiate big slow growing trees and smaller quick growing trees
 
@@ -32,7 +34,7 @@ cargo run
 [x] new generations of trees are able to be generated in a location where a tree already exists
 [x] tree count does not update in the UI
 [x] restarting does not restart the state
-[ ] board is not working properly for valid tree placement
+[x] board is not working properly for valid tree placement
 
 ## Design Notes
 

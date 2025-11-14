@@ -181,16 +181,23 @@ async fn main() {
             let mut dead_trees: Vec<(i32, i32)> = vec![];
 
             for tree in &mut trees {
-                // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.append
-                new_trees.append(&mut tree.create_new_gen(&mut |p: (i32, i32)| !(*board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap())));
+
                 println!("tree position: ({}, {}) age: {}", tree.position.0, tree.position.1, tree.age);
+                
+                let sapplings: Vec<Tree> = tree.create_new_gen(&mut |p: (i32, i32)| !(*board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap()));
+                for s in sapplings {
+                    let position: &mut bool = board.get_mut(s.position.0 as usize).unwrap().get_mut(s.position.1 as usize).unwrap();
+                    (*position) = true;
+                    println!("sappling position: ({}, {}) age: {}", s.position.0, s.position.1, s.age);
+                    new_trees.push(s);
+                }
                 
                 if tree.age >= 3 {
                     dead_trees.push(tree.position);
                 }
 
-                let position = board.get_mut(tree.position.0 as usize).unwrap().get_mut(tree.position.1 as usize).unwrap();
-                (*position) = true;
+                // let position = board.get_mut(tree.position.0 as usize).unwrap().get_mut(tree.position.1 as usize).unwrap();
+                // (*position) = true;
             }
             trees.append(&mut new_trees);
 
