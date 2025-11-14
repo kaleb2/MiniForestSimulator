@@ -22,7 +22,10 @@ impl Tree {
         Self {
             position: (position_x, position_y),
             _size: 1,
-            color: GREEN,
+            color: match tree_type {
+                TreeType::FastGrowing => GREEN,
+                TreeType::SlowGrowing => DARKGREEN,
+            },
             tree_type
         }
     }
