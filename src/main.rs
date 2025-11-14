@@ -12,7 +12,7 @@ enum TreeType {
 
 struct Tree {
     position: Point,
-    _size: i32,
+    _age: i32,
     color: Color,
     tree_type: TreeType,
 }
@@ -21,7 +21,7 @@ impl Tree {
     fn new(position_x: i32, position_y: i32, tree_type: TreeType) -> Self {
         Self {
             position: (position_x, position_y),
-            _size: 1,
+            _age: 0,
             color: match tree_type {
                 TreeType::FastGrowing => GREEN,
                 TreeType::SlowGrowing => DARKGREEN,
@@ -30,9 +30,10 @@ impl Tree {
         }
     }
 
-    fn create_new_gen<F: FnMut(Point) -> bool>(&self, is_space_clear: &mut F) -> Vec<Self> {
-        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+    fn create_new_gen<F: FnMut(Point) -> bool>(&mut self, is_space_clear: &mut F) -> Vec<Self> {
 
+        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+        self._age += 1;
         if self.tree_type == TreeType::SlowGrowing {
             match new_position {
                 Some(p) => vec![Self {
@@ -40,7 +41,7 @@ impl Tree {
                         p.0,
                         p.1,
                     ),
-                    _size: 1,
+                    _age: 0,
                     color: self.color,
                     tree_type: self.tree_type
                 }],
@@ -56,7 +57,7 @@ impl Tree {
                             p.0,
                             p.1,
                         ),
-                        _size: 1,
+                        _age: 0,
                         color: self.color,
                         tree_type: self.tree_type
                     }),
@@ -73,15 +74,28 @@ impl Tree {
 fn generate_valid_position_in_range<F: FnMut(Point) -> bool>(position: Point, range: i32, is_space_clear: &mut F) -> Option<Point> {
     let offset_x: i32 = rand::gen_range(-range, range);
     let offset_y: i32 = rand::gen_range(-range, range);
-    if (offset_x == 0 && offset_y == 0) || !is_space_clear((position.0 + offset_x, position.1 + offset_y)) {
+    if offset_x == 0 && offset_y == 0 {
+        return None
+    } 
+    let position_x = position.0 + offset_x;
+    let position_y = position.1 + offset_y;
+    if position_x < 0 || position_y < 0 {
         return None
     }
-    Some((position.0 + offset_x, position.1 + offset_y))
+    if position_x >= SQUARES || position_y >= SQUARES {
+        return None
+    }
+    if !is_space_clear((position_x, position_y)) {
+        return None
+    }
+
+    Some((position_x, position_y))
 }
 
 #[macroquad::main("Mini Forest Sim")]
 async fn main() {
     let mut trees: Vec<Tree> = vec![];
+    let mut board: Vec<Vec<bool>> = vec![vec![false; SQUARES as usize]; SQUARES as usize];
     let mut tree_count: usize = 0;
     let update_period = 1.0;
     let mut last_update: f64 = get_time();
@@ -141,6 +155,8 @@ async fn main() {
                 println!("position: {} {}", position_x, position_y);
 
                 trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::SlowGrowing));
+                let position = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
+                (*position) = true;
             } else if is_mouse_button_pressed(MouseButton::Right) {
                 let (mouse_x, mouse_y) = mouse_position();
                 println!("mouse: {} {}", mouse_x, mouse_y);
@@ -151,6 +167,8 @@ async fn main() {
                 println!("position: {} {}", position_x, position_y);
 
                 trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::FastGrowing));
+                let position = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
+                (*position) = true;
             }
 
             for tree in &trees {
@@ -176,10 +194,17 @@ async fn main() {
 
             last_update = get_time();
             let mut new_trees: Vec<Tree> = vec![];
+            let mut dead_trees: Vec<&Tree> = vec![];
 
-            for tree in &trees {
+            for tree in &mut trees {
                 // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.append
-                new_trees.append(&mut tree.create_new_gen(&mut |p: (i32, i32)| !trees.iter().any(|t: &Tree| t.position.0 == p.0 && t.position.1 == p.1)));
+                new_trees.append(&mut tree.create_new_gen(&mut |p: (i32, i32)| !(*board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap())));
+                println!("tree position: ({}, {}) age: {}", tree.position.0, tree.position.1, tree._age);
+                if tree._age > 3 {
+                    dead_trees.push(tree);
+                }
+                let position = board.get_mut(tree.position.0 as usize).unwrap().get_mut(tree.position.1 as usize).unwrap();
+                (*position) = true;
             }
             for tree in new_trees {
                 trees.push(tree);
