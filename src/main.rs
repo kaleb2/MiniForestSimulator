@@ -1,6 +1,6 @@
 use macroquad::{prelude::*, rand};
 
-const SQUARES: i32 = 128;
+const SQUARES: i32 = 32;
 
 type Point = (i32, i32);
 
@@ -12,7 +12,7 @@ enum TreeType {
 
 struct Tree {
     position: Point,
-    _age: i32,
+    age: i32,
     color: Color,
     tree_type: TreeType,
 }
@@ -21,11 +21,11 @@ impl Tree {
     fn new(position_x: i32, position_y: i32, tree_type: TreeType) -> Self {
         Self {
             position: (position_x, position_y),
-            _age: 0,
+            age: 0,
             color: match tree_type {
-                TreeType::FastGrowing => GREEN,
-                TreeType::SlowGrowing => DARKGREEN,
-            },
+                        TreeType::FastGrowing => GREEN,
+                        TreeType::SlowGrowing => DARKGREEN,
+                    },
             tree_type
         }
     }
@@ -33,18 +33,10 @@ impl Tree {
     fn create_new_gen<F: FnMut(Point) -> bool>(&mut self, is_space_clear: &mut F) -> Vec<Self> {
 
         let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
-        self._age += 1;
+        self.age += 1;
         if self.tree_type == TreeType::SlowGrowing {
             match new_position {
-                Some(p) => vec![Self {
-                    position: (
-                        p.0,
-                        p.1,
-                    ),
-                    _age: 0,
-                    color: self.color,
-                    tree_type: self.tree_type
-                }],
+                Some(p) => vec![Self::new(p.0, p.1, self.tree_type)],
                 None => vec![],
             }
         } else if self.tree_type == TreeType::FastGrowing {
@@ -52,15 +44,7 @@ impl Tree {
             for _ in 0..3 {
                 let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
                 match new_position {
-                    Some(p) => next_gen.push(Self {
-                        position: (
-                            p.0,
-                            p.1,
-                        ),
-                        _age: 0,
-                        color: self.color,
-                        tree_type: self.tree_type
-                    }),
+                    Some(p) => next_gen.push(Self::new(p.0, p.1, self.tree_type)),
                     None => continue,
                 }
             }
@@ -194,21 +178,29 @@ async fn main() {
 
             last_update = get_time();
             let mut new_trees: Vec<Tree> = vec![];
-            let mut dead_trees: Vec<&Tree> = vec![];
+            let mut dead_trees: Vec<(i32, i32)> = vec![];
 
             for tree in &mut trees {
                 // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.append
                 new_trees.append(&mut tree.create_new_gen(&mut |p: (i32, i32)| !(*board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap())));
-                println!("tree position: ({}, {}) age: {}", tree.position.0, tree.position.1, tree._age);
-                if tree._age > 3 {
-                    dead_trees.push(tree);
+                println!("tree position: ({}, {}) age: {}", tree.position.0, tree.position.1, tree.age);
+                
+                if tree.age >= 3 {
+                    dead_trees.push(tree.position);
                 }
+
                 let position = board.get_mut(tree.position.0 as usize).unwrap().get_mut(tree.position.1 as usize).unwrap();
                 (*position) = true;
             }
-            for tree in new_trees {
-                trees.push(tree);
+            trees.append(&mut new_trees);
+
+            trees.retain(|t| t.age < 3);
+
+            for dead_tree in dead_trees  {
+                let position = board.get_mut(dead_tree.0 as usize).unwrap().get_mut(dead_tree.1 as usize).unwrap();
+                (*position) = false;
             }
+
             tree_count = trees.len();
         }
         // this block updates the screen state
@@ -281,6 +273,7 @@ async fn main() {
                 trees.clear();
                 tree_count = 0;
                 end_sim = false;
+                board = vec![vec![false; SQUARES as usize]; SQUARES as usize];
             }
         }
         next_frame().await;
