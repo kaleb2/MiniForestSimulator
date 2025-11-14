@@ -4,10 +4,10 @@ const SQUARES: i32 = 128;
 
 type Point = (i32, i32);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum TreeType {
     SlowGrowing,
-    _FastGrowing,
+    FastGrowing,
 }
 
 struct Tree {
@@ -26,47 +26,54 @@ impl Tree {
             tree_type
         }
     }
+
+    fn create_new_gen<F: FnMut(Point) -> bool>(&self, is_space_clear: &mut F) -> Vec<Self> {
+        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+
+        if self.tree_type == TreeType::SlowGrowing {
+            match new_position {
+                Some(p) => vec![Self {
+                    position: (
+                        p.0,
+                        p.1,
+                    ),
+                    _size: 1,
+                    color: self.color,
+                    tree_type: self.tree_type
+                }],
+                None => vec![],
+            }
+        } else if self.tree_type == TreeType::FastGrowing {
+            let mut next_gen: Vec<Self> = vec![];
+            for _ in 0..3 {
+                let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+                match new_position {
+                    Some(p) => next_gen.push(Self {
+                        position: (
+                            p.0,
+                            p.1,
+                        ),
+                        _size: 1,
+                        color: self.color,
+                        tree_type: self.tree_type
+                    }),
+                    None => continue,
+                }
+            }
+            next_gen
+        } else {
+            vec![]
+        }        
+    }    
 }
 
-trait Plant {
-    fn create_new_gen<F: Fn(Point) -> bool>(&self, is_space_clear: F) -> Vec<Self> where Self: Sized;
-}
-
-fn generate_valid_position_in_range<F: Fn(Point) -> bool>(position: Point, range: i32, is_space_clear: F) -> Option<Point> {
-    let max_attempts = 5;
-    let mut attempts = 0;
-    let mut offset_x: i32 = 0;
-    let mut offset_y: i32 = 0;
-    while ((offset_x == 0 && offset_y == 0) || !is_space_clear((position.0 + offset_x, position.1 + offset_y)))
-            && attempts < max_attempts {
-        offset_x = rand::gen_range(-range, range);
-        offset_y = rand::gen_range(-range, range);
-        attempts += 1;
-    }
-    if attempts == max_attempts {
+fn generate_valid_position_in_range<F: FnMut(Point) -> bool>(position: Point, range: i32, is_space_clear: &mut F) -> Option<Point> {
+    let offset_x: i32 = rand::gen_range(-range, range);
+    let offset_y: i32 = rand::gen_range(-range, range);
+    if (offset_x == 0 && offset_y == 0) || !is_space_clear((position.0 + offset_x, position.1 + offset_y)) {
         return None
     }
     Some((position.0 + offset_x, position.1 + offset_y))
-}
-
-impl Plant for Tree {
-    fn create_new_gen<F: Fn(Point) -> bool>(&self, is_space_clear: F) -> Vec<Self> {
-        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
-
-        match new_position {
-            Some(p) => vec![Self {
-                position: (
-                    p.0,
-                    p.1,
-                ),
-                _size: 1,
-                color: GREEN,
-                tree_type: self.tree_type
-            }],
-            None => vec![],
-        }
-        
-    }
 }
 
 #[macroquad::main("Mini Forest Sim")]
@@ -131,6 +138,16 @@ async fn main() {
                 println!("position: {} {}", position_x, position_y);
 
                 trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::SlowGrowing));
+            } else if is_mouse_button_pressed(MouseButton::Right) {
+                let (mouse_x, mouse_y) = mouse_position();
+                println!("mouse: {} {}", mouse_x, mouse_y);
+
+                let position_x: f32 = (mouse_x - (sq_size / 2.0) - offset_x) / sq_size;
+                let position_y: f32 = (mouse_y - (sq_size / 2.0) - offset_y) / sq_size;
+
+                println!("position: {} {}", position_x, position_y);
+
+                trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::FastGrowing));
             }
 
             for tree in &trees {
@@ -159,7 +176,7 @@ async fn main() {
 
             for tree in &trees {
                 // https://doc.rust-lang.org/std/vec/struct.Vec.html#method.append
-                new_trees.append(&mut tree.create_new_gen(|p: (i32, i32)| !trees.iter().any(|t: &Tree| t.position.0 == p.0 && t.position.1 == p.1)));
+                new_trees.append(&mut tree.create_new_gen(&mut |p: (i32, i32)| !trees.iter().any(|t: &Tree| t.position.0 == p.0 && t.position.1 == p.1)));
             }
             for tree in new_trees {
                 trees.push(tree);
