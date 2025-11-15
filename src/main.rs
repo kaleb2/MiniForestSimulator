@@ -1,15 +1,16 @@
 use macroquad::{prelude::*, rand};
 
-const SQUARES: i32 = 32;
+const SQUARES: i32 = 16;
 
 type Point = (i32, i32);
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TreeType {
     SlowGrowing,
     FastGrowing,
 }
 
+#[derive(Clone, Debug)]
 struct Tree {
     position: Point,
     age: i32,
@@ -86,7 +87,7 @@ fn generate_valid_position_in_range<F: FnMut(Point) -> bool>(position: Point, ra
 #[macroquad::main("Mini Forest Sim")]
 async fn main() {
     let mut trees: Vec<Tree> = vec![];
-    let mut board: Vec<Vec<bool>> = vec![vec![false; SQUARES as usize]; SQUARES as usize];
+    let mut board: Vec<Vec<Option<Tree>>> = vec![vec![Option::None; SQUARES as usize]; SQUARES as usize];
     let mut tree_count: usize = 0;
     let update_period = 1.0;
     let mut last_update: f64 = get_time();
@@ -146,8 +147,9 @@ async fn main() {
                 println!("position: {} {}", position_x, position_y);
 
                 trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::SlowGrowing));
-                let position = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
-                (*position) = true;
+                let position: &mut Option<Tree> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
+                *position = Some(Tree::new(position_x as i32, position_y as i32, TreeType::SlowGrowing));
+
             } else if is_mouse_button_pressed(MouseButton::Right) {
                 let (mouse_x, mouse_y) = mouse_position();
                 println!("mouse: {} {}", mouse_x, mouse_y);
@@ -158,8 +160,9 @@ async fn main() {
                 println!("position: {} {}", position_x, position_y);
 
                 trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::FastGrowing));
-                let position = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
-                (*position) = true;
+                let position: &mut Option<Tree> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
+                *position = Some(Tree::new(position_x as i32, position_y as i32, TreeType::FastGrowing));
+                
             }
 
             for tree in &trees {
@@ -191,10 +194,10 @@ async fn main() {
 
                 println!("tree position: ({}, {}) age: {}", tree.position.0, tree.position.1, tree.age);
                 
-                let sapplings: Vec<Tree> = tree.create_new_gen(&mut |p: (i32, i32)| !(*board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap()));
+                let sapplings: Vec<Tree> = tree.create_new_gen(&mut |p: (i32, i32)| board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap().is_none());
                 for s in sapplings {
-                    let position: &mut bool = board.get_mut(s.position.0 as usize).unwrap().get_mut(s.position.1 as usize).unwrap();
-                    (*position) = true;
+                    let position: &mut Option<Tree> = board.get_mut(s.position.0 as usize).unwrap().get_mut(s.position.1 as usize).unwrap();
+                    *position = Some(Tree::new(s.position.0, s.position.1, s.tree_type));
                     println!("sappling position: ({}, {}) age: {}", s.position.0, s.position.1, s.age);
                     new_trees.push(s);
                 }
@@ -211,8 +214,8 @@ async fn main() {
             trees.retain(|t| !t.is_dead());
 
             for dead_tree in dead_trees  {
-                let position = board.get_mut(dead_tree.0 as usize).unwrap().get_mut(dead_tree.1 as usize).unwrap();
-                (*position) = false;
+                let position: &mut Option<Tree> = board.get_mut(dead_tree.0 as usize).unwrap().get_mut(dead_tree.1 as usize).unwrap();
+                *position = Option::None;
             }
 
             tree_count = trees.len();
@@ -287,7 +290,7 @@ async fn main() {
                 trees.clear();
                 tree_count = 0;
                 end_sim = false;
-                board = vec![vec![false; SQUARES as usize]; SQUARES as usize];
+                board = vec![vec![Option::None; SQUARES as usize]; SQUARES as usize];
             }
         }
         next_frame().await;
