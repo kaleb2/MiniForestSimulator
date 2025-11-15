@@ -52,7 +52,14 @@ impl Tree {
         } else {
             vec![]
         }        
-    }    
+    }
+
+    fn is_dead(&self) -> bool{
+        match self.tree_type {
+            TreeType::FastGrowing => self.age >= 3,
+            TreeType::SlowGrowing => self.age >= 10,
+        }
+    }
 }
 
 fn generate_valid_position_in_range<F: FnMut(Point) -> bool>(position: Point, range: i32, is_space_clear: &mut F) -> Option<Point> {
@@ -192,7 +199,7 @@ async fn main() {
                     new_trees.push(s);
                 }
                 
-                if tree.age >= 3 {
+                if tree.is_dead() {
                     dead_trees.push(tree.position);
                 }
 
@@ -201,7 +208,7 @@ async fn main() {
             }
             trees.append(&mut new_trees);
 
-            trees.retain(|t| t.age < 3);
+            trees.retain(|t| !t.is_dead());
 
             for dead_tree in dead_trees  {
                 let position = board.get_mut(dead_tree.0 as usize).unwrap().get_mut(dead_tree.1 as usize).unwrap();
