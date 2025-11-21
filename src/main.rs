@@ -16,6 +16,7 @@ struct Tree {
     age: i32,
     color: Color,
     tree_type: TreeType,
+    is_dead: bool,
 }
 
 impl Tree {
@@ -27,7 +28,8 @@ impl Tree {
                         TreeType::FastGrowing => GREEN,
                         TreeType::SlowGrowing => DARKGREEN,
                     },
-            tree_type
+            tree_type,
+            is_dead: false,
         }
     }
 
@@ -57,8 +59,8 @@ impl Tree {
 
     fn is_dead(&self) -> bool{
         match self.tree_type {
-            TreeType::FastGrowing => self.age >= 3,
-            TreeType::SlowGrowing => self.age >= 10,
+            TreeType::FastGrowing => self.age >= 3 || self.is_dead,
+            TreeType::SlowGrowing => self.age >= 10 || self.is_dead,
         }
     }
 }
@@ -195,7 +197,7 @@ async fn main() {
 
             last_update = get_time();
             let mut new_trees: Vec<Tree> = vec![];
-            let mut dead_trees: Vec<(i32, i32)> = vec![];
+            let mut fallen_trees: Vec<(i32, i32)> = vec![];
 
             for tree in &mut trees {
 
@@ -207,20 +209,25 @@ async fn main() {
                 }
                 
                 if tree.is_dead() {
-                    dead_trees.push(tree.position);
+                    // for now always fall North (+y)
+                    fallen_trees.push(tree.position);
+                    fallen_trees.push((tree.position.0, tree.position.1+1));
+                    fallen_trees.push((tree.position.0, tree.position.1+2));
+                    fallen_trees.push((tree.position.0, tree.position.1+3));
+                    fallen_trees.push((tree.position.0, tree.position.1+4));
                 }
-
-                // let position = board.get_mut(tree.position.0 as usize).unwrap().get_mut(tree.position.1 as usize).unwrap();
-                // (*position) = true;
             }
             trees.append(&mut new_trees);
 
-            trees.retain(|t| !t.is_dead());
+            for fallen_tree in &fallen_trees  {
 
-            for dead_tree in dead_trees  {
-                let position: &mut Option<Tree> = board.get_mut(dead_tree.0 as usize).unwrap().get_mut(dead_tree.1 as usize).unwrap();
-                *position = Option::None;
+                if board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1+1) as usize).is_some() {
+                    let position: &mut Option<Tree> = board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1+1) as usize).unwrap();
+                    *position = Option::None;
+                }
             }
+
+            trees.retain(|t: &Tree| !t.is_dead() && !fallen_trees.contains(&t.position));
 
             tree_count = trees.len();
         }
