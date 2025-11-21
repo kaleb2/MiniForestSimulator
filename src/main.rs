@@ -1,6 +1,6 @@
 use macroquad::{prelude::*, rand};
 
-const SQUARES: i32 = 16;
+const SQUARES: i32 = 64;
 
 type Point = (i32, i32);
 
@@ -33,7 +33,7 @@ impl Tree {
 
     fn create_new_gen<F: FnMut(Point) -> bool>(&mut self, is_space_clear: &mut F) -> Vec<Self> {
 
-        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 4, is_space_clear);
         self.age += 1;
         if self.tree_type == TreeType::SlowGrowing {
             match new_position {
@@ -43,7 +43,7 @@ impl Tree {
         } else if self.tree_type == TreeType::FastGrowing {
             let mut next_gen: Vec<Self> = vec![];
             for _ in 0..3 {
-                let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
+                let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 8, is_space_clear);
                 match new_position {
                     Some(p) => next_gen.push(Self::new(p.0, p.1, self.tree_type)),
                     None => continue,
@@ -84,6 +84,50 @@ fn generate_valid_position_in_range<F: FnMut(Point) -> bool>(position: Point, ra
     Some((position_x, position_y))
 }
 
+fn draw_board(game_size: f32, offset_x: f32, offset_y: f32, sq_size: f32) {
+
+    clear_background(LIGHTGRAY);
+    // draw background
+    draw_rectangle(offset_x, offset_y, game_size - 20., game_size - 20., WHITE);
+
+    // draw horizontal lines to form boxes
+    for i in 1..SQUARES {
+        draw_line(
+            offset_x,
+            offset_y + sq_size * i as f32,
+            screen_width() - offset_x,
+            offset_y + sq_size * i as f32,
+            2.,
+            LIGHTGRAY,
+        );
+    }
+
+    // draw vertical lines to form boxes
+    for i in 1..SQUARES {
+        draw_line(
+            offset_x + sq_size * i as f32,
+            offset_y,
+            offset_x + sq_size * i as f32,
+            screen_height() - offset_y,
+            2.,
+            LIGHTGRAY,
+        );
+    }
+}
+
+fn draw_trees(trees: &Vec<Tree>, offset_x: f32, offset_y: f32, sq_size: f32,) {
+    for tree in trees {
+        // draw tree as a green circle
+        draw_circle(
+            offset_x + tree.position.0 as f32 * sq_size + (sq_size / 2.0),
+            offset_y + tree.position.1 as f32 * sq_size + (sq_size / 2.0),
+            sq_size / 2.0,
+            // sq_size,
+            tree.color,
+        );
+    }
+}
+
 #[macroquad::main("Mini Forest Sim")]
 async fn main() {
     let mut trees: Vec<Tree> = vec![];
@@ -99,36 +143,9 @@ async fn main() {
         let offset_y: f32 = (screen_height() - game_size) / 2. + 10.;
         let sq_size: f32 = (screen_height() - offset_y * 2.) / SQUARES as f32;
 
-        while trees.len() < 3 {
-            clear_background(LIGHTGRAY);
-
-            // draw background
-            draw_rectangle(offset_x, offset_y, game_size - 20., game_size - 20., WHITE);
-
-            // draw horizontal lines to form boxes
-            for i in 1..SQUARES {
-                draw_line(
-                    offset_x,
-                    offset_y + sq_size * i as f32,
-                    screen_width() - offset_x,
-                    offset_y + sq_size * i as f32,
-                    2.,
-                    LIGHTGRAY,
-                );
-            }
-
-            // draw vertical lines to form boxes
-            for i in 1..SQUARES {
-                draw_line(
-                    offset_x + sq_size * i as f32,
-                    offset_y,
-                    offset_x + sq_size * i as f32,
-                    screen_height() - offset_y,
-                    2.,
-                    LIGHTGRAY,
-                );
-            }
-
+        // innitialization code
+        while trees.len() < 4 {
+            draw_board(game_size, offset_x, offset_y, sq_size);
             draw_text(
                 format!("Tree count {tree_count} Click to add more trees").as_str(),
                 10.,
@@ -165,16 +182,7 @@ async fn main() {
                 
             }
 
-            for tree in &trees {
-                // draw tree as a green circle
-                draw_circle(
-                    offset_x + tree.position.0 as f32 * sq_size + (sq_size / 2.0),
-                    offset_y + tree.position.1 as f32 * sq_size + (sq_size / 2.0),
-                    sq_size / 2.0,
-                    // sq_size,
-                    tree.color,
-                );
-            }
+            draw_trees(&trees, offset_x, offset_y, sq_size);
 
             next_frame().await;
         }
@@ -182,9 +190,8 @@ async fn main() {
         if !end_sim && is_key_down(KeyCode::Q) {
             end_sim = true;
         }
-        // // this block updates the game state
+        // this block updates the game state
         if !end_sim && get_time() - last_update > update_period && trees.len() < 4000 {
-            println!("Updating trees");
 
             last_update = get_time();
             let mut new_trees: Vec<Tree> = vec![];
@@ -192,13 +199,10 @@ async fn main() {
 
             for tree in &mut trees {
 
-                println!("tree position: ({}, {}) age: {}", tree.position.0, tree.position.1, tree.age);
-                
                 let sapplings: Vec<Tree> = tree.create_new_gen(&mut |p: (i32, i32)| board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap().is_none());
                 for s in sapplings {
                     let position: &mut Option<Tree> = board.get_mut(s.position.0 as usize).unwrap().get_mut(s.position.1 as usize).unwrap();
                     *position = Some(Tree::new(s.position.0, s.position.1, s.tree_type));
-                    println!("sappling position: ({}, {}) age: {}", s.position.0, s.position.1, s.age);
                     new_trees.push(s);
                 }
                 
@@ -222,45 +226,10 @@ async fn main() {
         }
         // this block updates the screen state
         if !end_sim {
-            clear_background(LIGHTGRAY);
-
-            // draw background
-            draw_rectangle(offset_x, offset_y, game_size - 20., game_size - 20., WHITE);
-
-            // draw horizontal lines to form boxes
-            for i in 1..SQUARES {
-                draw_line(
-                    offset_x,
-                    offset_y + sq_size * i as f32,
-                    screen_width() - offset_x,
-                    offset_y + sq_size * i as f32,
-                    2.,
-                    LIGHTGRAY,
-                );
-            }
-
-            // draw vertical lines to form boxes
-            for i in 1..SQUARES {
-                draw_line(
-                    offset_x + sq_size * i as f32,
-                    offset_y,
-                    offset_x + sq_size * i as f32,
-                    screen_height() - offset_y,
-                    2.,
-                    LIGHTGRAY,
-                );
-            }
-
-            for tree in &trees {
-                // draw tree as a green circle
-                draw_circle(
-                    offset_x + tree.position.0 as f32 * sq_size + (sq_size / 2.0),
-                    offset_y + tree.position.1 as f32 * sq_size + (sq_size / 2.0),
-                    sq_size / 2.0,
-                    // sq_size,
-                    tree.color,
-                );
-            }
+            
+            draw_board(game_size, offset_x, offset_y, sq_size);
+            
+            draw_trees(&trees, offset_x, offset_y, sq_size);
 
             // draw instructions
             draw_text(
