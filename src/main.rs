@@ -8,6 +8,7 @@ type Point = (i32, i32);
 enum TreeType {
     SlowGrowing,
     FastGrowing,
+    Burning,
 }
 
 #[derive(Clone, Debug)]
@@ -27,6 +28,7 @@ impl Tree {
             color: match tree_type {
                         TreeType::FastGrowing => GREEN,
                         TreeType::SlowGrowing => DARKGREEN,
+                        TreeType::Burning => ORANGE,
                     },
             tree_type,
             is_dead: false,
@@ -61,6 +63,7 @@ impl Tree {
         match self.tree_type {
             TreeType::FastGrowing => self.age >= 2 || self.is_dead,
             TreeType::SlowGrowing => self.age >= 10 || self.is_dead,
+            TreeType::Burning => self.age >= 5,
         }
     }
 }
@@ -117,7 +120,7 @@ fn draw_board(game_size: f32, offset_x: f32, offset_y: f32, sq_size: f32) {
     }
 }
 
-fn draw_trees(trees: &Vec<Tree>, offset_x: f32, offset_y: f32, sq_size: f32,) {
+fn draw_trees(trees: &Vec<Tree>, offset_x: f32, offset_y: f32, sq_size: f32) {
     for tree in trees {
         // draw tree as a green circle
         draw_circle(
@@ -128,6 +131,16 @@ fn draw_trees(trees: &Vec<Tree>, offset_x: f32, offset_y: f32, sq_size: f32,) {
             tree.color,
         );
     }
+}
+
+fn get_board_position_from_mouse_position(offset_x: f32, offset_y: f32, sq_size: f32) -> (i32, i32) {
+    let (mouse_x, mouse_y) = mouse_position();
+    println!("mouse: {} {}", mouse_x, mouse_y);
+
+    let position_x: i32 = ((mouse_x - (sq_size / 2.0) - offset_x) / sq_size) as i32;
+    let position_y: i32 = ((mouse_y - (sq_size / 2.0) - offset_y) / sq_size) as i32;
+
+    (position_x, position_y)
 }
 
 #[macroquad::main("Mini Forest Sim")]
@@ -157,30 +170,22 @@ async fn main() {
             );
 
             if is_mouse_button_pressed(MouseButton::Left) {
-                let (mouse_x, mouse_y) = mouse_position();
-                println!("mouse: {} {}", mouse_x, mouse_y);
+                let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
 
-                let position_x: f32 = (mouse_x - (sq_size / 2.0) - offset_x) / sq_size;
-                let position_y: f32 = (mouse_y - (sq_size / 2.0) - offset_y) / sq_size;
+                println!("slow tree position: {} {}", position_x, position_y);
 
-                println!("position: {} {}", position_x, position_y);
-
-                trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::SlowGrowing));
+                trees.push(Tree::new(position_x, position_y, TreeType::SlowGrowing));
                 let position: &mut Option<Tree> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
-                *position = Some(Tree::new(position_x as i32, position_y as i32, TreeType::SlowGrowing));
+                *position = Some(Tree::new(position_x, position_y, TreeType::SlowGrowing));
 
             } else if is_mouse_button_pressed(MouseButton::Right) {
-                let (mouse_x, mouse_y) = mouse_position();
-                println!("mouse: {} {}", mouse_x, mouse_y);
+                let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
 
-                let position_x: f32 = (mouse_x - (sq_size / 2.0) - offset_x) / sq_size;
-                let position_y: f32 = (mouse_y - (sq_size / 2.0) - offset_y) / sq_size;
+                println!("fast tree position: {} {}", position_x, position_y);
 
-                println!("position: {} {}", position_x, position_y);
-
-                trees.push(Tree::new(position_x as i32, position_y as i32, TreeType::FastGrowing));
+                trees.push(Tree::new(position_x, position_y, TreeType::FastGrowing));
                 let position: &mut Option<Tree> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
-                *position = Some(Tree::new(position_x as i32, position_y as i32, TreeType::FastGrowing));
+                *position = Some(Tree::new(position_x, position_y, TreeType::FastGrowing));
                 
             }
 
@@ -191,6 +196,16 @@ async fn main() {
         // handle quit
         if !end_sim && is_key_down(KeyCode::Q) {
             end_sim = true;
+        }
+        if is_mouse_button_pressed(MouseButton::Middle) {
+            let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
+
+            println!("fire position: {} {}", position_x, position_y);
+
+            trees.retain(|t: &Tree| t.position != (position_x, position_y));
+            trees.push(Tree::new(position_x, position_y, TreeType::Burning));
+            let position: &mut Option<Tree> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
+            *position = Some(Tree::new(position_x, position_y, TreeType::Burning));
         }
         // this block updates the game state
         if !end_sim && get_time() - last_update > update_period && trees.len() < 4000 {
