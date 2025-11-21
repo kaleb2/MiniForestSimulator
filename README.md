@@ -24,8 +24,8 @@ cargo run
 
 ## Internal Features
 
-[ ] helper function to update the display text
-[ ] helper function to redraw the board
+[x] helper function to update the display text
+[x] helper function to redraw the board
 
 ## Known Bugs
 
