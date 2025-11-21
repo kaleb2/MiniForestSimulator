@@ -14,9 +14,9 @@ cargo run
 
 [x] Trees that die
 
-[ ] Trees that visually indicate age
+[x] Trees that are removed when dead
 
-[ ] Dead trees create nurse logs
+[x] Dead trees create nurse logs
 
 [x] Differentiate big slow growing trees and smaller quick growing trees
 
@@ -37,11 +37,6 @@ cargo run
 [x] board is not working properly for valid tree placement
 
 ## Design Notes
-
-* I'm not sure that the create_new_generation function needs to be in a plant trait. It might be better instead to make it part of the tree struct impl.
-    * It really comes down to where the fast vs slow growing trees are represented.
-    * As a part of the Tree struct means the trait doesn't offer much
-    * As a part of a different Tree struct e.g. FastTree, SlowTree with diff impls of the trait. That makes more sense, but is it necessary.
 
 ## Acknowledgments
 Used the following text for learning rust

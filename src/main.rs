@@ -35,7 +35,7 @@ impl Tree {
 
     fn create_new_gen<F: FnMut(Point) -> bool>(&mut self, is_space_clear: &mut F) -> Vec<Self> {
 
-        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 4, is_space_clear);
+        let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
         self.age += 1;
         if self.tree_type == TreeType::SlowGrowing {
             match new_position {
@@ -45,7 +45,7 @@ impl Tree {
         } else if self.tree_type == TreeType::FastGrowing {
             let mut next_gen: Vec<Self> = vec![];
             for _ in 0..3 {
-                let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 8, is_space_clear);
+                let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 10, is_space_clear);
                 match new_position {
                     Some(p) => next_gen.push(Self::new(p.0, p.1, self.tree_type)),
                     None => continue,
@@ -59,7 +59,7 @@ impl Tree {
 
     fn is_dead(&self) -> bool{
         match self.tree_type {
-            TreeType::FastGrowing => self.age >= 3 || self.is_dead,
+            TreeType::FastGrowing => self.age >= 2 || self.is_dead,
             TreeType::SlowGrowing => self.age >= 10 || self.is_dead,
         }
     }
@@ -209,20 +209,26 @@ async fn main() {
                 }
                 
                 if tree.is_dead() {
-                    // for now always fall North (+y)
+
                     fallen_trees.push(tree.position);
-                    fallen_trees.push((tree.position.0, tree.position.1+1));
-                    fallen_trees.push((tree.position.0, tree.position.1+2));
-                    fallen_trees.push((tree.position.0, tree.position.1+3));
-                    fallen_trees.push((tree.position.0, tree.position.1+4));
+                    if tree.tree_type == TreeType::SlowGrowing {
+                        let mut other_fallen_positions: Vec<(i32, i32)> = match rand::gen_range(1, 5) {
+                            1 => vec![(tree.position.0, tree.position.1+1), (tree.position.0, tree.position.1+2), (tree.position.0, tree.position.1+3), (tree.position.0, tree.position.1+4)],
+                            2 => vec![(tree.position.0+1, tree.position.1), (tree.position.0+2, tree.position.1), (tree.position.0+3, tree.position.1), (tree.position.0+4, tree.position.1)],
+                            3 => vec![(tree.position.0, tree.position.1-1), (tree.position.0, tree.position.1-2), (tree.position.0, tree.position.1-3), (tree.position.0, tree.position.1-4)],
+                            4 => vec![(tree.position.0-1, tree.position.1), (tree.position.0-2, tree.position.1), (tree.position.0-3, tree.position.1), (tree.position.0-4, tree.position.1)],
+                            _ => vec![],
+                        };
+                        fallen_trees.append(&mut other_fallen_positions);
+                    }
                 }
             }
             trees.append(&mut new_trees);
 
             for fallen_tree in &fallen_trees  {
 
-                if board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1+1) as usize).is_some() {
-                    let position: &mut Option<Tree> = board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1+1) as usize).unwrap();
+                if board.get_mut(fallen_tree.0 as usize).is_some() && board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1) as usize).is_some() {
+                    let position: &mut Option<Tree> = board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1) as usize).unwrap();
                     *position = Option::None;
                 }
             }
