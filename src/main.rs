@@ -1,70 +1,67 @@
+use std::{collections::HashSet, hash::Hash};
+
 use macroquad::{prelude::*, rand};
 
 const SQUARES: i32 = 64;
 
 type Point = (i32, i32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TreeType {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum TreeState {
     SlowGrowing,
     FastGrowing,
     Burning,
+    Burned
 }
 
-#[derive(Clone, Debug)]
-struct Tree {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+struct BoardCell {
     position: Point,
     age: i32,
-    color: Color,
-    tree_type: TreeType,
-    is_dead: bool,
+    // color: Color,
+    tree_state: TreeState,
 }
 
-impl Tree {
-    fn new(position_x: i32, position_y: i32, tree_type: TreeType) -> Self {
+impl BoardCell {
+    fn new(position_x: i32, position_y: i32, max_age: i32, tree_state: TreeState) -> Self {
         Self {
             position: (position_x, position_y),
-            age: 0,
-            color: match tree_type {
-                        TreeType::FastGrowing => GREEN,
-                        TreeType::SlowGrowing => DARKGREEN,
-                        TreeType::Burning => ORANGE,
-                    },
-            tree_type,
-            is_dead: false,
+            age: max_age,
+            // color: match tree_state {
+            //             TreeState::FastGrowing => GREEN,
+            //             TreeState::SlowGrowing => DARKGREEN,
+            //             TreeState::Burning => ORANGE,
+            //             TreeState::Burned => BLACK,
+            //         },
+            tree_state,
         }
     }
 
-    fn create_new_gen<F: FnMut(Point) -> bool>(&mut self, is_space_clear: &mut F) -> Vec<Self> {
+    fn create_new_gen<F: FnMut(Point) -> bool>(&self, is_space_clear: &mut F) -> HashSet<Self> {
 
         let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 6, is_space_clear);
-        self.age += 1;
-        if self.tree_type == TreeType::SlowGrowing {
+        if self.tree_state == TreeState::SlowGrowing {
             match new_position {
-                Some(p) => vec![Self::new(p.0, p.1, self.tree_type)],
-                None => vec![],
+                Some(p) => HashSet::from([Self::new(p.0, p.1, 2, self.tree_state)]),
+                None => HashSet::new(),
             }
-        } else if self.tree_type == TreeType::FastGrowing {
-            let mut next_gen: Vec<Self> = vec![];
+        } else if self.tree_state == TreeState::FastGrowing {
+            let mut next_gen: HashSet<Self> = HashSet::new();
             for _ in 0..3 {
                 let new_position: Option<(i32, i32)> = generate_valid_position_in_range(self.position, 10, is_space_clear);
                 match new_position {
-                    Some(p) => next_gen.push(Self::new(p.0, p.1, self.tree_type)),
+                    Some(p) => next_gen.insert(Self::new(p.0, p.1, 10, self.tree_state)),
                     None => continue,
-                }
+                };
             }
             next_gen
         } else {
-            vec![]
-        }        
+            HashSet::new()
+        }
     }
 
     fn is_dead(&self) -> bool{
-        match self.tree_type {
-            TreeType::FastGrowing => self.age >= 2 || self.is_dead,
-            TreeType::SlowGrowing => self.age >= 10 || self.is_dead,
-            TreeType::Burning => self.age >= 5,
-        }
+        self.age == 0
     }
 }
 
@@ -73,7 +70,7 @@ fn generate_valid_position_in_range<F: FnMut(Point) -> bool>(position: Point, ra
     let offset_y: i32 = rand::gen_range(-range, range);
     if offset_x == 0 && offset_y == 0 {
         return None
-    } 
+    }
     let position_x = position.0 + offset_x;
     let position_y = position.1 + offset_y;
     if position_x < 0 || position_y < 0 {
@@ -89,7 +86,7 @@ fn generate_valid_position_in_range<F: FnMut(Point) -> bool>(position: Point, ra
     Some((position_x, position_y))
 }
 
-fn draw_board(game_size: f32, offset_x: f32, offset_y: f32, sq_size: f32) {
+fn draw_board_background(game_size: f32, offset_x: f32, offset_y: f32, sq_size: f32) {
 
     clear_background(LIGHTGRAY);
     // draw background
@@ -120,15 +117,21 @@ fn draw_board(game_size: f32, offset_x: f32, offset_y: f32, sq_size: f32) {
     }
 }
 
-fn draw_trees(trees: &Vec<Tree>, offset_x: f32, offset_y: f32, sq_size: f32) {
+fn draw_trees(trees: &Vec<BoardCell>, offset_x: f32, offset_y: f32, sq_size: f32) {
     for tree in trees {
         // draw tree as a green circle
+        let color: Color = match tree.tree_state {
+            TreeState::SlowGrowing => DARKGREEN,
+            TreeState::FastGrowing => GREEN,
+            TreeState::Burning => ORANGE,
+            TreeState::Burned => BLACK,
+        };
         draw_circle(
             offset_x + tree.position.0 as f32 * sq_size + (sq_size / 2.0),
             offset_y + tree.position.1 as f32 * sq_size + (sq_size / 2.0),
             sq_size / 2.0,
             // sq_size,
-            tree.color,
+            color,
         );
     }
 }
@@ -145,8 +148,7 @@ fn get_board_position_from_mouse_position(offset_x: f32, offset_y: f32, sq_size:
 
 #[macroquad::main("Mini Forest Sim")]
 async fn main() {
-    let mut trees: Vec<Tree> = vec![];
-    let mut board: Vec<Vec<Option<Tree>>> = vec![vec![Option::None; SQUARES as usize]; SQUARES as usize];
+    let mut board: [[Option<BoardCell>; 64]; 64] = [[Option::None; SQUARES as usize]; SQUARES as usize];
     let mut tree_count: usize = 0;
     let update_period = 1.0;
     let mut last_update: f64 = get_time();
@@ -159,8 +161,8 @@ async fn main() {
         let sq_size: f32 = (screen_height() - offset_y * 2.) / SQUARES as f32;
 
         // innitialization code
-        while trees.len() < 4 {
-            draw_board(game_size, offset_x, offset_y, sq_size);
+        while tree_count < 4 {
+            draw_board_background(game_size, offset_x, offset_y, sq_size);
             draw_text(
                 format!("Tree count {tree_count} Click to add more trees").as_str(),
                 10.,
@@ -174,59 +176,79 @@ async fn main() {
 
                 println!("slow tree position: {} {}", position_x, position_y);
 
-                trees.push(Tree::new(position_x, position_y, TreeType::SlowGrowing));
-                let position: &mut Option<Tree> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
-                *position = Some(Tree::new(position_x, position_y, TreeType::SlowGrowing));
+                // trees.push(BoardCell::new(position_x, position_y, 3, TreeState::SlowGrowing));
+                let position: &mut Option<BoardCell> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
+                *position = Some(BoardCell::new(position_x, position_y, 3, TreeState::SlowGrowing));
 
             } else if is_mouse_button_pressed(MouseButton::Right) {
                 let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
 
                 println!("fast tree position: {} {}", position_x, position_y);
 
-                trees.push(Tree::new(position_x, position_y, TreeType::FastGrowing));
-                let position: &mut Option<Tree> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
-                *position = Some(Tree::new(position_x, position_y, TreeType::FastGrowing));
-                
+                // trees.push(BoardCell::new(position_x, position_y, TreeState::FastGrowing));
+                let position: &mut Option<BoardCell> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
+                *position = Some(BoardCell::new(position_x, position_y, 10, TreeState::FastGrowing));
+
             }
 
-            draw_trees(&trees, offset_x, offset_y, sq_size);
+            // draw_trees(&trees, offset_x, offset_y, sq_size);
 
             next_frame().await;
+            tree_count += 1;
         }
         // handle quit
         if !end_sim && is_key_down(KeyCode::Q) {
             end_sim = true;
         }
-        if is_mouse_button_pressed(MouseButton::Middle) {
-            let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
-
-            println!("fire position: {} {}", position_x, position_y);
-
-            trees.retain(|t: &Tree| t.position != (position_x, position_y));
-            trees.push(Tree::new(position_x, position_y, TreeType::Burning));
-            let position: &mut Option<Tree> = board.get_mut(position_x as usize).unwrap().get_mut(position_y as usize).unwrap();
-            *position = Some(Tree::new(position_x, position_y, TreeType::Burning));
-        }
         // this block updates the game state
-        if !end_sim && get_time() - last_update > update_period && trees.len() < 4000 {
+        if !end_sim && get_time() - last_update > update_period && tree_count < 4000 {
 
             last_update = get_time();
-            let mut new_trees: Vec<Tree> = vec![];
-            let mut fallen_trees: Vec<(i32, i32)> = vec![];
+            let mut new_trees: HashSet<BoardCell> = HashSet::new();
+            let mut fallen_trees: HashSet<Point> = HashSet::new();
+            let mut burning_trees: HashSet<Point> = HashSet::new();
+            let mut burned_trees: HashSet<Point> = HashSet::new();
+
+            // handle
+            if is_mouse_button_pressed(MouseButton::Middle) {
+                let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
+
+                println!("fire position: {} {}", position_x, position_y);
+
+                burned_trees.insert((position_x, position_y));
+            }
+
+            for i in 0..SQUARES {
+                for j in 0..SQUARES {
+                    let cell_option: &mut Option<BoardCell> = board.get_mut(i as usize).unwrap().get_mut(j as usize).unwrap();
+                    if cell_option.is_none() {
+                        continue;
+                    }
+                    let cell = cell_option.unwrap();
+                    if cell.tree_state == TreeState::SlowGrowing || cell.tree_state == TreeState::FastGrowing {
+                        let sapplings: HashSet<BoardCell> = cell.create_new_gen(&mut |p: (i32, i32)| board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap().is_none());
+                        for s in sapplings {
+                            let position: &mut Option<BoardCell> = board.get_mut(s.position.0 as usize).unwrap().get_mut(s.position.1 as usize).unwrap();
+                            *position = Some(BoardCell::new(s.position.0, s.position.1, s.tree_state));
+                            new_trees.push(s);
+                        }
+                    }
+                }
+            }
 
             for tree in &mut trees {
 
-                let sapplings: Vec<Tree> = tree.create_new_gen(&mut |p: (i32, i32)| board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap().is_none());
+                let sapplings: Vec<BoardCell> = tree.create_new_gen(&mut |p: (i32, i32)| board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap().is_none());
                 for s in sapplings {
-                    let position: &mut Option<Tree> = board.get_mut(s.position.0 as usize).unwrap().get_mut(s.position.1 as usize).unwrap();
-                    *position = Some(Tree::new(s.position.0, s.position.1, s.tree_type));
+                    let position: &mut Option<BoardCell> = board.get_mut(s.position.0 as usize).unwrap().get_mut(s.position.1 as usize).unwrap();
+                    *position = Some(BoardCell::new(s.position.0, s.position.1, s.tree_state));
                     new_trees.push(s);
                 }
-                
+
                 if tree.is_dead() {
 
                     fallen_trees.push(tree.position);
-                    if tree.tree_type == TreeType::SlowGrowing {
+                    if tree.tree_state == TreeState::SlowGrowing {
                         let mut other_fallen_positions: Vec<(i32, i32)> = match rand::gen_range(1, 5) {
                             1 => vec![(tree.position.0, tree.position.1+1), (tree.position.0, tree.position.1+2), (tree.position.0, tree.position.1+3), (tree.position.0, tree.position.1+4)],
                             2 => vec![(tree.position.0+1, tree.position.1), (tree.position.0+2, tree.position.1), (tree.position.0+3, tree.position.1), (tree.position.0+4, tree.position.1)],
@@ -243,20 +265,20 @@ async fn main() {
             for fallen_tree in &fallen_trees  {
 
                 if board.get_mut(fallen_tree.0 as usize).is_some() && board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1) as usize).is_some() {
-                    let position: &mut Option<Tree> = board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1) as usize).unwrap();
+                    let position: &mut Option<BoardCell> = board.get_mut(fallen_tree.0 as usize).unwrap().get_mut((fallen_tree.1) as usize).unwrap();
                     *position = Option::None;
                 }
             }
 
-            trees.retain(|t: &Tree| !t.is_dead() && !fallen_trees.contains(&t.position));
+            trees.retain(|t: &BoardCell| !t.is_dead() && !fallen_trees.contains(&t.position));
 
             tree_count = trees.len();
         }
         // this block updates the screen state
         if !end_sim {
-            
-            draw_board(game_size, offset_x, offset_y, sq_size);
-            
+
+            draw_board_background(game_size, offset_x, offset_y, sq_size);
+
             draw_trees(&trees, offset_x, offset_y, sq_size);
 
             // draw instructions
@@ -284,10 +306,9 @@ async fn main() {
             );
 
             if is_key_down(KeyCode::Enter) {
-                trees.clear();
                 tree_count = 0;
                 end_sim = false;
-                board = vec![vec![Option::None; SQUARES as usize]; SQUARES as usize];
+                board = [[Option::None; SQUARES as usize]; SQUARES as usize];
             }
         }
         next_frame().await;
