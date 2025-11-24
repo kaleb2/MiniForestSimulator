@@ -20,7 +20,7 @@ cargo run
 
 [x] Differentiate big slow growing trees and smaller quick growing trees
 
-[ ] Removing trees due to burning
+[x] Removing trees due to burning
 
 ## Internal Features
 
