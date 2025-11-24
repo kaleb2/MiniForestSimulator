@@ -141,6 +141,7 @@ async fn main() {
     let update_period = 1.0;
     let mut last_update: f64 = get_time();
     let mut end_sim: bool = false;
+    let mut positions_to_burning: HashSet<(Point, BoardCell)> = HashSet::new();
 
     loop {
         let game_size: f32 = screen_width().min(screen_height());
@@ -190,7 +191,6 @@ async fn main() {
         if !end_sim && is_key_down(KeyCode::Q) {
             end_sim = true;
         }
-        let mut positions_to_burning: HashSet<(Point, BoardCell)> = HashSet::new();
         // handle
         if is_mouse_button_pressed(MouseButton::Middle) {
             let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
@@ -248,7 +248,7 @@ async fn main() {
                             // expand the fire down and right with the same age
                             let position_x = i+1;
                             let position_y = j-1;
-                            positions_to_burning.insert(((position_x, position_y), BoardCell::new(cell.age, TreeState::Burning)));
+                            positions_to_burning.insert(((position_x, position_y), BoardCell::new(cell.age-1, TreeState::Burning)));
                         }
                     } else if cell.tree_state == TreeState::Burned {
                         positions_to_none.insert((i, j));
@@ -256,17 +256,21 @@ async fn main() {
                 }
             }
 
-            for burning in positions_to_burning {
-                let cell_option: &mut Option<BoardCell> = board.get_mut(burning.0.0 as usize).unwrap().get_mut(burning.0.1 as usize).unwrap();
-                if cell_option.is_some() && (cell_option.unwrap().tree_state == TreeState::SlowGrowing || cell_option.unwrap().tree_state == TreeState::FastGrowing) {
-                    println!("setting to burning {:?}", burning);
-                    *cell_option = Some(burning.1);
-                }
+            for burning in &positions_to_burning {
+                if board.get_mut(burning.0.0 as usize).is_some() && board.get_mut(burning.0.0 as usize).unwrap().get_mut((burning.0.1) as usize).is_some() {
+                    let cell_option: &mut Option<BoardCell> = board.get_mut(burning.0.0 as usize).unwrap().get_mut(burning.0.1 as usize).unwrap();
+                    println!("Attempting to burn: {:?}. Current cell: {:?}.", burning.0, cell_option);
+                    if cell_option.is_some() && (cell_option.unwrap().tree_state == TreeState::SlowGrowing || cell_option.unwrap().tree_state == TreeState::FastGrowing) {
+                        println!("setting to burning {:?}", burning);
+                        *cell_option = Some(burning.1);
+                    }
+                }                
             }
+            positions_to_burning.clear();
 
             for burned in positions_to_burned {
                 let cell_option: &mut Option<BoardCell> = board.get_mut(burned.0 as usize).unwrap().get_mut(burned.1 as usize).unwrap();
-                if cell_option.is_some() && (cell_option.unwrap().tree_state == TreeState::SlowGrowing || cell_option.unwrap().tree_state == TreeState::FastGrowing) {
+                if cell_option.is_some() {
                     println!("setting to burned {:?}", burned);
                     *cell_option = Some(BoardCell::new(1, TreeState::Burned));
                 }
