@@ -2,10 +2,11 @@ use std::{collections::HashSet, hash::Hash};
 
 use macroquad::{prelude::*, rand};
 
-const SQUARES: i32 = 8;
-const MAX_FAST_AGE: i32 = 2;
-const MAX_SLOW_AGE: i32 = 10;
-const MAX_BURNING_AGE: i32 = 3;
+const SQUARES: i32 = 64;
+const MAX_FAST_AGE: i32 = 3;
+const MAX_SLOW_AGE: i32 = 12;
+const MAX_BURNING_AGE: i32 = 7;
+const SETUP_COUNT: usize = 8;
 
 type Point = (i32, i32);
 
@@ -49,7 +50,18 @@ impl BoardCell {
                 };
             }
             next_gen
-        } else {
+        } else if self.tree_state == TreeState::Burning {
+            let mut next_gen: HashSet<(Point, Self)> = HashSet::new();
+            for _ in 0..6 {
+                let new_position: Option<(i32, i32)> = generate_valid_position_in_range(position, 2, is_space_clear);
+                match new_position {
+                    Some(p) => next_gen.insert((p, Self::new(self.age-1, self.tree_state))),
+                    None => continue,
+                };
+            }
+            next_gen
+        } 
+        else {
             HashSet::new()
         }
     }
@@ -151,10 +163,10 @@ async fn main() {
         let mut initial_trees: Vec<(Point, TreeState)> = vec![];
 
         // innitialization code
-        while tree_count < 1 {
+        while tree_count < SETUP_COUNT {
             draw_board_background(game_size, offset_x, offset_y, sq_size);
             draw_text(
-                format!("Tree count {tree_count} Click to add more trees").as_str(),
+                format!("Tree count {tree_count} Click to add more trees up to {SETUP_COUNT}").as_str(),
                 10.,
                 20.,
                 20.,
@@ -205,9 +217,7 @@ async fn main() {
             last_update = get_time();
             let mut new_trees: HashSet<(Point, BoardCell)> = HashSet::new();
             let mut positions_to_burned: HashSet<Point> = HashSet::new();
-            let mut positions_to_none: HashSet<Point> = HashSet::new();
-
-            
+            let mut positions_to_none: HashSet<Point> = HashSet::new();            
 
             for i in 0..SQUARES {
                 for j in 0..SQUARES {
@@ -225,14 +235,18 @@ async fn main() {
                             positions_to_none.insert((i, j));
                             if cell.tree_state == TreeState::SlowGrowing {
                                 let other_fallen_positions: HashSet<Point> = match rand::gen_range(1, 5) {
-                                    1 => HashSet::from([(i, j+1), (i, j+2), (i, j+3), (i, j+4)]),
-                                    2 => HashSet::from([(i+1, j), (i+2, j), (i+3, j), (i+4, j)]),
-                                    3 => HashSet::from([(i, j-1), (i, j-2), (i, j-3), (i, j-4)]),
-                                    4 => HashSet::from([(i-1, j), (i-2, j), (i-3, j), (i-4, j)]),
+                                    1 => HashSet::from([(i, j+1), (i, j+2), (i, j+3), (i, j+4), (i, j+5), (i, j+6)]),
+                                    2 => HashSet::from([(i+1, j), (i+2, j), (i+3, j), (i+4, j), (i+5, j), (i+6, j)]),
+                                    3 => HashSet::from([(i, j-1), (i, j-2), (i, j-3), (i, j-4), (i, j-5), (i, j-6)]),
+                                    4 => HashSet::from([(i-1, j), (i-2, j), (i-3, j), (i-4, j), (i-5, j), (i-6, j)]),
                                     _ => HashSet::from([]),
                                 };
                                 for pos in other_fallen_positions {
-                                    positions_to_none.insert(pos);
+                                    if rand::gen_range(0, 10) < 5 {
+                                        new_trees.insert((pos, BoardCell::new(MAX_SLOW_AGE, TreeState::SlowGrowing)));
+                                    } else {
+                                        positions_to_none.insert(pos);
+                                    }
                                 }
                             }
                         } else {
@@ -245,10 +259,14 @@ async fn main() {
                         if cell.age == 0 {
                             positions_to_burned.insert((i, j));
                         } else {
-                            // expand the fire down and right with the same age
-                            let position_x = i+1;
-                            let position_y = j-1;
-                            positions_to_burning.insert(((position_x, position_y), BoardCell::new(cell.age-1, TreeState::Burning)));
+                            let more_fires: HashSet<(Point, BoardCell)> = cell.create_new_gen((i, j), &mut |p: (i32, i32)| {
+                                    let cell: &Option<BoardCell> = board.get(p.0 as usize).unwrap().get(p.1 as usize).unwrap();
+                                    cell.is_some() && (cell.unwrap().tree_state == TreeState::FastGrowing || cell.unwrap().tree_state == TreeState::SlowGrowing)
+                                });
+
+                            for fire in more_fires  {
+                                positions_to_burning.insert(fire);
+                            }
                         }
                     } else if cell.tree_state == TreeState::Burned {
                         positions_to_none.insert((i, j));
@@ -259,9 +277,9 @@ async fn main() {
             for burning in &positions_to_burning {
                 if board.get_mut(burning.0.0 as usize).is_some() && board.get_mut(burning.0.0 as usize).unwrap().get_mut((burning.0.1) as usize).is_some() {
                     let cell_option: &mut Option<BoardCell> = board.get_mut(burning.0.0 as usize).unwrap().get_mut(burning.0.1 as usize).unwrap();
-                    println!("Attempting to burn: {:?}. Current cell: {:?}.", burning.0, cell_option);
+                    // println!("Attempting to burn: {:?}. Current cell: {:?}.", burning.0, cell_option);
                     if cell_option.is_some() && (cell_option.unwrap().tree_state == TreeState::SlowGrowing || cell_option.unwrap().tree_state == TreeState::FastGrowing) {
-                        println!("setting to burning {:?}", burning);
+                        // println!("setting to burning {:?}", burning);
                         *cell_option = Some(burning.1);
                     }
                 }                
@@ -271,30 +289,32 @@ async fn main() {
             for burned in positions_to_burned {
                 let cell_option: &mut Option<BoardCell> = board.get_mut(burned.0 as usize).unwrap().get_mut(burned.1 as usize).unwrap();
                 if cell_option.is_some() {
-                    println!("setting to burned {:?}", burned);
+                    // println!("setting to burned {:?}", burned);
                     *cell_option = Some(BoardCell::new(1, TreeState::Burned));
-                }
-            }
-
-            for new_tree in new_trees  {
-                let cell_option: &mut Option<BoardCell> = board.get_mut(new_tree.0.0 as usize).unwrap().get_mut(new_tree.0.1 as usize).unwrap();
-                if cell_option.is_some() && (cell_option.unwrap().tree_state == TreeState::Burning || cell_option.unwrap().tree_state == TreeState::Burned) {
-                    continue;
-                }
-                else {
-                    println!("setting to new tree {:?}", new_tree.0);
-                    *cell_option = Some(new_tree.1);
                 }
             }
 
             for none in positions_to_none {
                 if board.get_mut(none.0 as usize).is_some() && board.get_mut(none.0 as usize).unwrap().get_mut((none.1) as usize).is_some() {
-                    println!("setting to none {:?}", none);
+                    // println!("setting to none {:?}", none);
 
                     let cell_option: &mut Option<BoardCell> = board.get_mut(none.0 as usize).unwrap().get_mut(none.1 as usize).unwrap();
                     *cell_option = None;
                 }
             }
+
+            for new_tree in new_trees  {
+                if board.get_mut(new_tree.0.0 as usize).is_some() && board.get_mut(new_tree.0.0 as usize).unwrap().get_mut((new_tree.0.1) as usize).is_some() {
+                    let cell_option: &mut Option<BoardCell> = board.get_mut(new_tree.0.0 as usize).unwrap().get_mut(new_tree.0.1 as usize).unwrap();
+                    if cell_option.is_some() && (cell_option.unwrap().tree_state == TreeState::Burning || cell_option.unwrap().tree_state == TreeState::Burned) {
+                        continue;
+                    }
+                    else {
+                        // println!("setting to new tree {:?}", new_tree.0);
+                        *cell_option = Some(new_tree.1);
+                    }
+                }                
+            }            
         }
         // this block updates the screen state
         if !end_sim {
