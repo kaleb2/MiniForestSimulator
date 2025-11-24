@@ -4,7 +4,7 @@ use macroquad::{prelude::*, rand};
 
 const SQUARES: i32 = 64;
 const MAX_FAST_AGE: i32 = 3;
-const MAX_SLOW_AGE: i32 = 12;
+const MAX_SLOW_AGE: i32 = 11;
 const MAX_BURNING_AGE: i32 = 7;
 const SETUP_COUNT: usize = 8;
 
@@ -154,6 +154,7 @@ async fn main() {
     let mut last_update: f64 = get_time();
     let mut end_sim: bool = false;
     let mut positions_to_burning: HashSet<(Point, BoardCell)> = HashSet::new();
+    let mut new_trees: HashSet<(Point, BoardCell)> = HashSet::new();
 
     loop {
         let game_size: f32 = screen_width().min(screen_height());
@@ -210,12 +211,23 @@ async fn main() {
             println!("fire position: {} {}", position_x, position_y);
 
             positions_to_burning.insert(((position_x, position_y), BoardCell::new(MAX_BURNING_AGE, TreeState::Burning)));
+        } else if is_mouse_button_pressed(MouseButton::Left) {
+            let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
+
+            println!("slow tree position: {} {}", position_x, position_y);
+
+            new_trees.insert(((position_x, position_y), BoardCell::new(MAX_SLOW_AGE, TreeState::SlowGrowing)));
+        } else if is_mouse_button_pressed(MouseButton::Right) {
+            let (position_x, position_y) = get_board_position_from_mouse_position(offset_x, offset_y, sq_size);
+
+            println!("fast tree position: {} {}", position_x, position_y);
+
+            new_trees.insert(((position_x, position_y), BoardCell::new(MAX_FAST_AGE, TreeState::FastGrowing)));
         }
         // this block updates the game state
         if !end_sim && get_time() - last_update > update_period && tree_count < 4000 {
 
             last_update = get_time();
-            let mut new_trees: HashSet<(Point, BoardCell)> = HashSet::new();
             let mut positions_to_burned: HashSet<Point> = HashSet::new();
             let mut positions_to_none: HashSet<Point> = HashSet::new();            
 
@@ -242,9 +254,13 @@ async fn main() {
                                     _ => HashSet::from([]),
                                 };
                                 for pos in other_fallen_positions {
-                                    if rand::gen_range(0, 10) < 5 {
+                                    let rand = rand::gen_range(0, 10);
+                                    if rand < 5 {
                                         new_trees.insert((pos, BoardCell::new(MAX_SLOW_AGE, TreeState::SlowGrowing)));
-                                    } else {
+                                    } else if rand > 8 {
+                                        new_trees.insert((pos, BoardCell::new(MAX_FAST_AGE, TreeState::FastGrowing)));
+                                    }
+                                    else {
                                         positions_to_none.insert(pos);
                                     }
                                 }
@@ -270,6 +286,10 @@ async fn main() {
                         }
                     } else if cell.tree_state == TreeState::Burned {
                         positions_to_none.insert((i, j));
+
+                        if rand::gen_range(0, 10) < 1 {
+                            new_trees.insert(((i, j), BoardCell::new(MAX_FAST_AGE, TreeState::FastGrowing)));
+                        }
                     }
                 }
             }
@@ -303,7 +323,7 @@ async fn main() {
                 }
             }
 
-            for new_tree in new_trees  {
+            for new_tree in &new_trees  {
                 if board.get_mut(new_tree.0.0 as usize).is_some() && board.get_mut(new_tree.0.0 as usize).unwrap().get_mut((new_tree.0.1) as usize).is_some() {
                     let cell_option: &mut Option<BoardCell> = board.get_mut(new_tree.0.0 as usize).unwrap().get_mut(new_tree.0.1 as usize).unwrap();
                     if cell_option.is_some() && (cell_option.unwrap().tree_state == TreeState::Burning || cell_option.unwrap().tree_state == TreeState::Burned) {
@@ -314,7 +334,8 @@ async fn main() {
                         *cell_option = Some(new_tree.1);
                     }
                 }                
-            }            
+            }
+            new_trees.clear();
         }
         // this block updates the screen state
         if !end_sim {
